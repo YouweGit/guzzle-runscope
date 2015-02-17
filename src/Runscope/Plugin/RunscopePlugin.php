@@ -4,6 +4,8 @@ namespace Runscope\Plugin;
 
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Guzzle\Common\Event;
+use Guzzle\Http\Client;
+use Guzzle\Http\Exception;
 
 /**
  * Plugin class that will transform all requests to go through Runscope.
@@ -30,6 +32,7 @@ class RunscopePlugin implements EventSubscriberInterface
     {
         return array(
             'request.before_send' => array('onBeforeSend', 255),
+            'request.complete' => array('onComplete', 255),
         );
     }
 
@@ -57,6 +60,99 @@ class RunscopePlugin implements EventSubscriberInterface
 
         if ($this->authToken) {
             $request->setHeader('Runscope-Bucket-Auth', $this->authToken);
+        }
+
+        $request->setHeader('timestamp', microtime(true));
+    }
+
+    /**
+     * Event triggered after sending a request
+     *
+     * @param Event $event
+     */
+    public function onComplete(Event $event)
+    {
+        /** @var \Guzzle\Http\Message\Request $eventRequest */
+        $eventRequest = $event['request'];
+
+        /** @var \Guzzle\Http\Message\Response $eventResponse */
+        $eventResponse = $event['response'];
+
+        $headers = $eventResponse->getHeaders();
+        $body = $eventResponse->getBody();
+        $runscopeMessageId = (string) $headers['runscope-message-id'];
+        $runscopeBody = (string) $body;
+
+        $xml = simplexml_load_string($runscopeBody);
+        $resultCode = (string) $xml->result_code;
+
+        if ($resultCode != '0') {
+            $baseUrl = 'https://api.runscope.com';
+            $user = 'knowme';
+            $pass = 'RtT273';
+            $bucketKey = '7d0t9opo6p59';
+            $uuid = 'ebc555c8-ebd6-40ed-a340-52949fd6969b';
+
+            /**
+             * Delete a message format
+             * /buckets/<bucket_key>/messages/<message_uuid>
+             */
+            $url = $baseUrl . '/buckets/' . $bucketKey . "/messages/" . $runscopeMessageId;
+
+            $client = new Client();
+            $request = $client->delete($url, array(
+                'auth' => array('knowme', 'RtT273'),
+                'Authorization' => 'Bearer 571bba61-fb22-430f-a884-8e38ca41747d'));
+            //$request->setHeader('auth', sprintf('%s:%s', $user, $pass));
+            //$request->addHeader('Authorization', 'Bearer 571bba61-fb22-430f-a884-8e38ca41747d');
+            $response = $request->send();
+
+            // Create the new message with status code 530
+            //$eventRequest->getResponse()->setStatus(530, 'Custom Code');
+
+            $formatted_request_headers = array();
+            foreach ($headers as $key => $header) {
+                $formatted_request_headers[$key] = (string) $header;
+            }
+
+            $formatted_response_headers = array();
+            foreach ($headers as $key => $header) {
+                $formatted_response_headers[$key] = (string) $header;
+            }
+
+            $json = array(
+                'request' => array(
+                    'method' => 'POST',
+                    'url' => $eventRequest->getUrl(),
+                    'headers' => $formatted_request_headers,
+                    'body' => (string) $eventRequest->getBody(),
+                    'timestamp' => microtime(true),
+                ),
+                'response' => array(
+                    'headers' => $formatted_request_headers,
+                    'status' => 530,
+                    'body' => $eventResponse->getBody(true),
+                    'response_time' => microtime(true)-1000,  //microtime(true) - header->getTimestamp()
+                    'timestamp' => microtime(true),
+                ),
+            );
+            $json = json_encode($json);
+
+            /**
+             * Create a message format
+             * /buckets/<bucket_key>/messages
+             */
+            $url = $baseUrl . '/buckets/' . $bucketKey . '/messages';
+
+            $client = new Client();
+            $request = $client->post($url, array(
+                'auth' => array('knowme', 'RtT273'),
+                'Authorization' => 'Bearer 571bba61-fb22-430f-a884-8e38ca41747d'), $json);
+            //$request->setHeader('auth', sprintf('%s:%s', $user, $pass));
+            //$request->addHeader('Authorization', 'Bearer 571bba61-fb22-430f-a884-8e38ca41747d');
+            //$request->addHeader('Content-Type:', 'application/json');
+            $request->getCurlOptions()->set(CURLOPT_HTTPHEADER, array('Content-Type: application/json'));
+            $response = $request->send();
         }
     }
 

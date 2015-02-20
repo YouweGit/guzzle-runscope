@@ -91,7 +91,10 @@ class RunscopePlugin implements EventSubscriberInterface
             $user = 'knowme';
             $pass = 'RtT273';
             $bucketKey = '7d0t9opo6p59';
-            $uuid = 'ebc555c8-ebd6-40ed-a340-52949fd6969b';
+            $headerConfig = array(
+                'auth' => array('knowme', 'RtT273'),
+                'Authorization' => 'Bearer 571bba61-fb22-430f-a884-8e38ca41747d'
+            );
 
             /**
              * Delete a message format
@@ -100,9 +103,7 @@ class RunscopePlugin implements EventSubscriberInterface
             $url = $baseUrl . '/buckets/' . $bucketKey . "/messages/" . $runscopeMessageId;
 
             $client = new Client();
-            $request = $client->delete($url, array(
-                'auth' => array('knowme', 'RtT273'),
-                'Authorization' => 'Bearer 571bba61-fb22-430f-a884-8e38ca41747d'));
+            $request = $client->delete($url, $headerConfig);
             //$request->setHeader('auth', sprintf('%s:%s', $user, $pass));
             //$request->addHeader('Authorization', 'Bearer 571bba61-fb22-430f-a884-8e38ca41747d');
             $response = $request->send();
@@ -132,7 +133,7 @@ class RunscopePlugin implements EventSubscriberInterface
                     'headers' => $formatted_request_headers,
                     'status' => 530,
                     'body' => $eventResponse->getBody(true),
-                    'response_time' => microtime(true)-1000,  //microtime(true) - header->getTimestamp()
+                    'response_time' => microtime(true)-floatval((string)$eventRequest->getHeaders()['timestamp']),  //microtime(true) - header->getTimestamp() (string) $eventRequest->getHeaders()['timestamp']
                     'timestamp' => microtime(true),
                 ),
             );
@@ -145,9 +146,7 @@ class RunscopePlugin implements EventSubscriberInterface
             $url = $baseUrl . '/buckets/' . $bucketKey . '/messages';
 
             $client = new Client();
-            $request = $client->post($url, array(
-                'auth' => array('knowme', 'RtT273'),
-                'Authorization' => 'Bearer 571bba61-fb22-430f-a884-8e38ca41747d'), $json);
+            $request = $client->post($url, $headerConfig, $json);
             //$request->setHeader('auth', sprintf('%s:%s', $user, $pass));
             //$request->addHeader('Authorization', 'Bearer 571bba61-fb22-430f-a884-8e38ca41747d');
             //$request->addHeader('Content-Type:', 'application/json');

@@ -72,6 +72,15 @@ class RunscopePlugin implements EventSubscriberInterface
      */
     public function onComplete(Event $event)
     {
+        /**
+         * Wait for 2 seconds to execute method. Otherwise it will throw an ClientErrorResponseException
+         */
+        $wait = 2;
+        $beginOnComplete = microtime(true);
+        sleep($wait);
+        $continueOnComplete = microtime(true);
+        $deltaDuration = $continueOnComplete - $beginOnComplete;
+
         /** @var \Guzzle\Http\Message\Request $eventRequest */
         $eventRequest = $event['request'];
 
@@ -86,10 +95,11 @@ class RunscopePlugin implements EventSubscriberInterface
         $xml = simplexml_load_string($runscopeBody);
         $resultCode = (string) $xml->result_code;
 
+        /**
+         * Successfully result_code must return 0 for other result_code change the statusCode to 530
+         */
         if ($resultCode != '0') {
             $baseUrl = 'https://api.runscope.com';
-            $user = 'knowme';
-            $pass = 'RtT273';
             $bucketKey = '7d0t9opo6p59';
             $headerConfig = array(
                 'auth' => array('knowme', 'RtT273'),
@@ -104,12 +114,7 @@ class RunscopePlugin implements EventSubscriberInterface
 
             $client = new Client();
             $request = $client->delete($url, $headerConfig);
-            //$request->setHeader('auth', sprintf('%s:%s', $user, $pass));
-            //$request->addHeader('Authorization', 'Bearer 571bba61-fb22-430f-a884-8e38ca41747d');
             $response = $request->send();
-
-            // Create the new message with status code 530
-            //$eventRequest->getResponse()->setStatus(530, 'Custom Code');
 
             $formatted_request_headers = array();
             foreach ($headers as $key => $header) {
@@ -133,7 +138,7 @@ class RunscopePlugin implements EventSubscriberInterface
                     'headers' => $formatted_request_headers,
                     'status' => 530,
                     'body' => $eventResponse->getBody(true),
-                    'response_time' => microtime(true)-floatval((string)$eventRequest->getHeaders()['timestamp']),  //microtime(true) - header->getTimestamp() (string) $eventRequest->getHeaders()['timestamp']
+                    'response_time' => microtime(true) - floatval((string)$eventRequest->getHeaders()['timestamp']) - $deltaDuration,  //microtime(true) - header->getTimestamp()
                     'timestamp' => microtime(true),
                 ),
             );
@@ -147,9 +152,6 @@ class RunscopePlugin implements EventSubscriberInterface
 
             $client = new Client();
             $request = $client->post($url, $headerConfig, $json);
-            //$request->setHeader('auth', sprintf('%s:%s', $user, $pass));
-            //$request->addHeader('Authorization', 'Bearer 571bba61-fb22-430f-a884-8e38ca41747d');
-            //$request->addHeader('Content-Type:', 'application/json');
             $request->getCurlOptions()->set(CURLOPT_HTTPHEADER, array('Content-Type: application/json'));
             $response = $request->send();
         }
